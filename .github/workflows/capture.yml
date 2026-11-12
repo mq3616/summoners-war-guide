@@ -11,8 +11,8 @@ jobs:
       - name: Fetch original
         run: |
           mkdir -p capture
-          curl -L --retry 2 --max-time 60 'https://forum.gamer.com.tw/Co.php?bPage=0&bsn=26380&sn=168001&subbsn=13' -o capture/original.html
-          curl -L --retry 2 --max-time 90 'https://r.jina.ai/https://forum.gamer.com.tw/Co.php?bPage=0&bsn=26380&sn=168001&subbsn=13' -o capture/reader.md
+          curl -L --retry 2 --max-time 60 'https://forum.gamer.com.tw/C.php?bsn=26380&snA=40953' -o capture/original.html
+          curl -L --retry 2 --max-time 90 'https://r.jina.ai/https://forum.gamer.com.tw/C.php?bsn=26380&snA=40953' -o capture/reader.md
           wc -c capture/*
       - uses: actions/upload-artifact@v4
         with:
