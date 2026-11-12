@@ -1,10 +1,10 @@
 {
   "reviewed_at": "2026-11-12",
-  "annotations": 50,
-  "expired_or_corrected_passages": 25,
-  "reviewed_sections": 22,
+  "annotations": 36,
+  "expired_or_corrected_passages": 10,
+  "reviewed_sections": 18,
   "original_text_retained_and_simplified": true,
-  "images_retained": 56,
+  "images_retained": 26,
   "screenshot_text": "original retained",
   "runtime_game_validation": false
 }

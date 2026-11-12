@@ -4,19 +4,19 @@ from bs4 import BeautifulSoup,NavigableString,Doctype,Comment
 from opencc import OpenCC
 import json,re,hashlib
 ROOT=Path(__file__).parent
-_converter=OpenCC('tw2sp').convert
+_converter=OpenCC('t2s').convert
 def convert(text):
- return _converter(text).replace('砲','炮')
+ return re.sub(r'(?<=[急看哭活有留临照接绕])著', '着', _converter(text)).replace('著手','着手').replace('砲','炮')
 
 def render_review(page):
  audit=json.loads((ROOT/'source/audit.json').read_text())
  soup=BeautifulSoup(page,'html.parser');body=soup.select_one('article.body')
  original_nodes=list(body.find_all(string=True));full=''.join(str(n) for n in original_nodes)
  positions=[i for i,c in enumerate(full) if not c.isspace()];normalized=''.join(full[i] for i in positions)
- def find(target):
-  t=''.join(target.split());idx=normalized.find(t)
+ def find(target,after=None):
+  t=''.join(target.split());begin=normalized.find(''.join(after.split()))+len(''.join(after.split())) if after else 0;idx=normalized.find(t,begin)
   assert idx>=0,'Missing annotation target: '+target
-  assert normalized.find(t,idx+1)<0,'Ambiguous annotation target: '+target
+  assert after or normalized.find(t,idx+1)<0,'Ambiguous annotation target: '+target
   return positions[idx],positions[idx+len(t)-1]+1
  def section_find(target):
   matches=[];offset=0
@@ -30,7 +30,7 @@ def render_review(page):
   return find(target)
  intervals=[];notes={};entries=[]
  for i,a in enumerate(audit['annotations']):
-  start,end=find(a['start'])
+  start,end=find(a['start'],a.get('after'))
   if a['end']:end=find(a['end'])[1]
   assert start<end
   if a['kind'] in ('expired','correction'):intervals.append((start,end))
@@ -62,7 +62,7 @@ def render_review(page):
  for note in copy.select('.audit-note'):note.decompose()
  assert copy.get_text()==full,'Annotation removed or changed source text'
  # Screenshots remain unaltered; outdated reward screenshots are visibly labelled.
- imgs=body.find_all('img');assert len(imgs)==56
+ imgs=body.find_all('img');assert len(imgs)==audit['image_occurrences']
  for idx,img in enumerate(imgs):
   if '/assets/' not in img.get('src','') and not img.get('src','').startswith('assets/'):continue
   if 'emotion' in img.get('class',[]):continue
@@ -72,18 +72,24 @@ def render_review(page):
   else:caption.string='原作者历史截图：图内繁体文字保留原样，角色、符文与数值须结合本节核对说明。'
   anchor=img.find_parent('a');(anchor or img).insert_after(caption)
  soup.html['lang']='zh-CN'
- soup.title.string='魔灵召唤开荒攻略｜简体核对版 · 2026-11-12'
+ soup.title.string=audit['page_title']
  soup.select_one('.top').string='魔灵召唤 · 简体核对版'
- soup.h1.string='2026 新手开局速通攻略｜简体核对版'
+ soup.h1.string=audit['page_heading']
  meta=soup.select_one('.meta');meta.append(soup.new_tag('br'));meta.append('核对日期：2026-11-12 · 原文署名保留，删除线及说明由本页新增')
  notice=soup.select_one('.notice');notice.clear()
- notice.append(BeautifulSoup('''<strong>先看这里：</strong>原文是9月的火热时刻活动攻略，该活动10月25日结束、10月26日截止领奖。<br><del>删除线</del>＝现在不能照做的旧活动步骤，或需纠正的绝对说法；蓝色说明＝角色、账号福利、技能或配装条件仍须核对。未划掉不代表已实测现版本稳刷。<br>正文已转简体，原截图保留原样；图片里的旧活动按钮、奖励或繁体字不作当前承诺。YouTube 视频保留原始嵌入。<br><strong>现在可优先参考：</strong>召唤师之路、正常推图、公会参与；已有角色的配队、技能与符文思路。不要为了旧活动花500水晶、凑任务数或批量升星。''','html.parser'))
- foot=soup.footer;foot.clear();foot.append('原作者：亚服的小布（纳闷／xbbryan）。依原帖“作者标示－非商业性”许可转载。原始正文和52个图片文件完整保留；本版将网页文字转简体，并于2026-11-12增加删除线与核对说明。截图保持原样，不改写图中文字。未进行游戏内通关验证。')
+ notice.append(BeautifulSoup('<strong>阅读说明：</strong>'+audit['overview']+'<br>'+audit['reading_note'],'html.parser'))
+ nav=soup.new_tag('nav',attrs={'class':'guide-toc','aria-label':'攻略目录'})
+ label=soup.new_tag('strong');label.string='章节目录';nav.append(label)
+ for i,section in enumerate(audit['sections']):
+  link=soup.new_tag('a',href='#section-'+str(i));link.string=section['heading'];nav.append(link)
+ notice.insert_after(nav)
+ foot=soup.footer;foot.clear();meta=json.loads((ROOT/'source/provenance.json').read_text())
+ foot.append('原作者：'+meta['author']+'。依原帖“作者标示－非商业性”许可转载。本版保留完整楼主正文和图片，网页文字转简体，并于2026-11-12增加核对说明；原图不改动。未进行游戏内通关验证。')
  refs=soup.new_tag('details');summary=soup.new_tag('summary');summary.string='核对来源与适用范围';refs.append(summary)
  for key,src in audit['sources'].items():
   p=soup.new_tag('p');link=soup.new_tag('a',href=src['url']);link.string=src['title'];p.append(link);refs.append(p)
  foot.append(refs)
- css=soup.new_tag('style');css.string='''.audit-note{display:block!important;margin:10px 0 16px!important;padding:10px 12px!important;border-left:3px solid #267b9a!important;background:#eff7fb!important;color:#294c5b!important;font:14px/1.8 Arial,"Microsoft YaHei",sans-serif!important;white-space:normal!important}.audit-note a{color:#086887!important}.audit-note.expired,.audit-note.correction{border-color:#b95442!important;background:#fff3ed!important;color:#704433!important}.audit-note.section-note{background:#f3f7f7!important;border-color:#78979e!important}.expired-text{color:#737373!important;text-decoration:line-through!important;text-decoration-thickness:1.5px!important}.expired-text *{color:inherit!important}.image-note{display:block!important;color:#66777c!important;font:12px/1.7 Arial,sans-serif!important;margin:5px 0 18px!important}.expired-image-note{color:#944839!important;background:#fff1e9!important;padding:5px 8px!important}details summary{cursor:pointer;font-weight:bold}''';soup.head.append(css)
+ css=soup.new_tag('style');css.string='''.audit-note{display:block!important;margin:10px 0 16px!important;padding:10px 12px!important;border-left:3px solid #267b9a!important;background:#eff7fb!important;color:#294c5b!important;font:14px/1.8 Arial,"Microsoft YaHei",sans-serif!important;white-space:normal!important}.audit-note a{color:#086887!important}.audit-note.expired,.audit-note.correction{border-color:#b95442!important;background:#fff3ed!important;color:#704433!important}.audit-note.section-note{background:#f3f7f7!important;border-color:#78979e!important}.expired-text{color:#737373!important;text-decoration:line-through!important;text-decoration-thickness:1.5px!important}.expired-text *{color:inherit!important}.image-note{display:block!important;color:#66777c!important;font:12px/1.7 Arial,sans-serif!important;margin:5px 0 18px!important}.expired-image-note{color:#944839!important;background:#fff1e9!important;padding:5px 8px!important}details summary{cursor:pointer;font-weight:bold}.guide-toc{padding:16px 32px;background:#f8fafb;border-bottom:1px solid #dde6e9;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;line-height:1.8}.guide-toc strong{flex-basis:100%}.guide-toc a{max-width:100%}.body blockquote{margin:12px 0;padding:0 0 0 12px;border-left:2px solid #dbe4e7}.body blockquote blockquote{margin:4px 0;padding:0;border:0}.body h2{font-size:23px}.body h3{font-size:19px}.body h4{font-size:16px}.body table{max-width:100%}.body ul,.body ol{padding-left:22px}@media(max-width:700px){.guide-toc{padding:14px 16px}.body blockquote{padding-left:8px}.body blockquote blockquote{padding-left:0}}''';soup.head.append(css)
  for node in list(soup.find_all(string=True)):
   if not isinstance(node,(Doctype,Comment)) and node.parent.name not in ('style','script'):node.replace_with(convert(str(node)))
  for t in soup.find_all(True):
@@ -94,8 +100,8 @@ def render_review(page):
  for tag in check.select('.audit-note,.image-note'):tag.decompose()
  expected=''.join(convert(str(n)) for n in original_nodes)
  assert check.get_text()==expected,'Simplified source coverage mismatch'
- assert len(check.find_all('img'))==56
+ assert len(check.find_all('img'))==audit['image_occurrences']
  assert len(soup.select('[data-audit-id]'))==len(audit['annotations'])
- report={'reviewed_at':audit['reviewed_at'],'annotations':len(entries),'expired_or_corrected_passages':sum(a['kind'] in ('expired','correction') for a in audit['annotations']),'reviewed_sections':len(audit['sections']),'original_text_retained_and_simplified':True,'images_retained':56,'screenshot_text':'original retained','runtime_game_validation':False}
+ report={'reviewed_at':audit['reviewed_at'],'annotations':len(entries),'expired_or_corrected_passages':sum(a['kind'] in ('expired','correction') for a in audit['annotations']),'reviewed_sections':len(audit['sections']),'original_text_retained_and_simplified':True,'images_retained':len(imgs),'screenshot_text':'original retained','runtime_game_validation':False}
  (ROOT/'docs/review-verification.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
  return str(soup),report
