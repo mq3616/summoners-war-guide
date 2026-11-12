@@ -8,6 +8,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Install text conversion dependencies
+        run: python3 -m pip install -r requirements.txt
       - name: Save images and verify full article
         run: python3 build.py
       - name: Commit static page
